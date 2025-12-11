@@ -15,6 +15,7 @@ namespace SeaBattle
     /// - ResultReceived("HIT"/"MISS"/"WIN")
     /// - ResetReceived()
     /// - Disconnected()
+    /// - ShipDestroyed(destroyedShipSize)
     /// </summary>
     public class NetworkManager
     {
@@ -38,6 +39,7 @@ namespace SeaBattle
         public event Action<string> ResultReceived;
         public event Action ResetReceived;
         public event Action Disconnected;
+        public event Action<int> ShipDestroyed; // Event for ship destruction notification
 
         public NetworkManager(bool isHost, string ip, int port)
         {
@@ -149,7 +151,7 @@ namespace SeaBattle
         private void HandleIncomingLine(string line)
         {
             // Simple protocol:
-            // "SHOT:x:y" / "RESULT:..." / "RESET" / "CLOSE"
+            // "SHOT:x:y" / "RESULT:..." / "RESET" / "CLOSE" / "SUNK:{shipSize}"
             if (line.StartsWith("SHOT:", StringComparison.OrdinalIgnoreCase))
             {
                 var parts = line.Split(':');
@@ -173,6 +175,16 @@ namespace SeaBattle
             {
                 // Remote requested closing
                 _cts.Cancel();
+            }
+            // Handle "SUNK:{shipSize}" message
+            else if (line.StartsWith("SUNK:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = line.Split(':');
+                if (parts.Length == 2 && int.TryParse(parts[1], out int destroyedSize))
+                {
+                    // Notify that an enemy ship has been destroyed
+                    ShipDestroyed?.Invoke(destroyedSize);
+                }
             }
         }
 
@@ -200,6 +212,23 @@ namespace SeaBattle
                 try
                 {
                     _writer.WriteLine($"RESULT:{result}");
+                }
+                catch
+                {
+                    // WorkerLoop will handle disconnection
+                }
+            }
+        }
+
+        // Send a "SUNK" message when a ship is destroyed
+        public void SendShipDestroyed(int destroyedShipSize)
+        {
+            lock (_syncRoot)
+            {
+                if (_writer == null) return;
+                try
+                {
+                    _writer.WriteLine($"SUNK:{destroyedShipSize}");
                 }
                 catch
                 {

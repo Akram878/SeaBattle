@@ -50,7 +50,7 @@ namespace SeaBattle
 
         private string _localIp = "Unknown";
 
-        // Replay coordination flags
+        // Replay coordination flags // no
         private bool _localWantsReplay = false;
         private bool _opponentWantsReplay = false;
 
@@ -409,6 +409,7 @@ namespace SeaBattle
             _network.ResultReceived += OnResultReceived;
             _network.ResetReceived += OnResetReceived;
             _network.Disconnected += OnDisconnected;
+            _network.ShipDestroyed += OnShipDestroyed;
         }
 
         private void StartNetworkInBackground()
@@ -673,6 +674,32 @@ namespace SeaBattle
                 else if (state == CellState.Miss)
                     _myButtons[x, y].BackColor = Color.Gray;
 
+                // تحقق من تدمير السفينة بعد الضربة
+                var destroyedShip = _session.MyBoard.CheckIfShipDestroyed(x, y);
+                if (destroyedShip != null)
+                {
+                    // إشعار اللاعب بتدمير سفينة
+                    MessageBox.Show(
+                        $"You have destroyed an enemy ship of size {destroyedShip.Size}!",
+                        "Enemy Ship Destroyed",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+
+                    // إرسال إشعار للخصم عن تدمير السفينة
+                    try
+                    {
+                        _network?.SendShipDestroyed(destroyedShip.Size);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(
+                            "Error while sending ship destroyed notification: " + ex.Message,
+                            "Error",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                }
+
                 string msg = isHit ? "HIT" : "MISS";
                 if (hasLost)
                     msg = "WIN";
@@ -693,6 +720,7 @@ namespace SeaBattle
                 }
             }));
         }
+
 
         private void OnResultReceived(string result)
         {
@@ -1159,5 +1187,18 @@ namespace SeaBattle
                 DoReplaySetup();
             }
         }
+
+
+        // هذا الحدث سيتم تفعيله عند تدمير السفينة من قبل الخصم
+        private void OnShipDestroyed(int destroyedShipSize)
+        {
+            MessageBox.Show(
+                $"A {destroyedShipSize}-cell ship of yours has been destroyed!",
+                "Ship Destroyed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+
     }
 }

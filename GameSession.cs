@@ -91,11 +91,11 @@ namespace SeaBattle
         /// <summary>
         /// Called when enemy fires at our board.
         /// </summary>
-        public (CellState state, bool isHit, bool hasLost) ReceiveEnemyShot(int x, int y) //???
+        public (CellState state, bool isHit, bool hasLost, int destroyedShipSize) ReceiveEnemyShot(int x, int y)
         {
             bool isHit;
             bool hasLost;
-            var state = MyBoard.ReceiveShot(x, y, out isHit, out hasLost);
+            var state = MyBoard.ReceiveShot(x, y, out isHit, out hasLost, out int destroyedSize);
 
             if (!isHit && !hasLost)
                 IsMyTurn = true; // miss => our turn
@@ -103,17 +103,18 @@ namespace SeaBattle
             if (hasLost)
                 Phase = GamePhase.Finished;
 
-            return (state, isHit, hasLost);
+            return (state, isHit, hasLost, destroyedSize);
         }
 
         /// <summary>
         /// Called when we receive result from enemy for our last shot.
         /// We determine enemy defeat based on our local hit count, not only on the "WIN" string.
         /// </summary>
-        public (bool isHit, bool enemyLost) ApplyMyShotResult(int x, int y, string result)
+        public (bool isHit, bool enemyLost, int destroyedShipSize) ApplyMyShotResult(int x, int y, string result)
         {
             bool isHit = (result == "HIT" || result == "WIN");
             bool enemyLost = false;
+            int destroyedSize = 0;
 
             EnemyBoard.MarkShotResult(x, y, isHit);
 
@@ -121,7 +122,17 @@ namespace SeaBattle
             {
                 HitsOnEnemy++;
 
-                // If we hit as many cells as the standard fleet size, enemy is logically defeated
+                // إذا كانت الضربة قد دمرت سفينة:
+                destroyedSize = EnemyBoard.CheckIfShipDestroyed(x, y)?.Size ?? 0;
+
+                // إذا تم تدمير السفينة
+                if (destroyedSize > 0)
+                {
+                    enemyLost = true;
+                    Phase = GamePhase.Finished;
+                }
+
+                // إذا تم ضرب جميع الخلايا في الأسطول
                 if (HitsOnEnemy >= Board.TotalShipCells)
                 {
                     enemyLost = true;
@@ -129,21 +140,19 @@ namespace SeaBattle
                 }
             }
 
-            // If the remote side explicitly tells us "WIN",
-            // we also treat it as enemy defeat (extra safety).
             if (result == "WIN")
             {
                 enemyLost = true;
                 Phase = GamePhase.Finished;
             }
 
-            // Turn management: if we missed and game not finished, turn goes to enemy
+            // إذا كانت الضربة خاطئة، يذهب الدور للخصم
             if (!isHit && !enemyLost)
             {
                 IsMyTurn = false;
             }
 
-            return (isHit, enemyLost);
+            return (isHit, enemyLost, destroyedSize);
         }
 
         /// <summary>
