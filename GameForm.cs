@@ -678,26 +678,18 @@ namespace SeaBattle
                 var destroyedShip = _session.MyBoard.CheckIfShipDestroyed(x, y);
                 if (destroyedShip != null)
                 {
-                    // إشعار اللاعب بتدمير سفينة
-                    MessageBox.Show(
-                        $"You have destroyed an enemy ship of size {destroyedShip.Size}!",
-                        "Enemy Ship Destroyed",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    // أرسل إشعار للخصم فوراً (غير阻-blocking)
+                    try { _network?.SendShipDestroyed(destroyedShip.Size); } catch { }
 
-                    // إرسال إشعار للخصم عن تدمير السفينة
-                    try
-                    {
-                        _network?.SendShipDestroyed(destroyedShip.Size);
-                    }
-                    catch (Exception ex)
+                    // أشعار محلي غير阻-blocking
+                    BeginInvoke((Action)(() =>
                     {
                         MessageBox.Show(
-                            "Error while sending ship destroyed notification: " + ex.Message,
-                            "Error",
+                            $"You have destroyed an enemy ship of size {destroyedShip.Size}!",
+                            "Enemy Ship Destroyed",
                             MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                    }
+                            MessageBoxIcon.Information);
+                    }));
                 }
 
                 string msg = isHit ? "HIT" : "MISS";
@@ -1192,12 +1184,17 @@ namespace SeaBattle
         // هذا الحدث سيتم تفعيله عند تدمير السفينة من قبل الخصم
         private void OnShipDestroyed(int destroyedShipSize)
         {
-            MessageBox.Show(
-                $"A {destroyedShipSize}-cell ship of yours has been destroyed!",
-                "Ship Destroyed",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
+            // إشعار غير阻-blocking
+            BeginInvoke((Action)(() =>
+            {
+                MessageBox.Show(
+                    $"One of your ships of size {destroyedShipSize} was destroyed!",
+                    "Ship Lost",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }));
         }
+
 
 
     }
